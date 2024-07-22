@@ -21,9 +21,17 @@ log_file_path = os.path.join(output_directory_path, 'process_log.log')
 logging.basicConfig(filename=log_file_path, level=logging.INFO,
                     format='%(asctime)s:%(levelname)s:%(message)s')
 
-# 清洗数据函数：去除换行符
+# 清洗数据函数：去除换行符和不必要的文本
 def clean_data(row_data):
-    return [cell.replace('\n', '') if cell else '' for cell in row_data]
+    cleaned_data = []
+    for cell in row_data:
+        if cell:
+            # 去除换行符
+            cell = cell.replace('\n', '')
+            # 去除“纳税人名称：”和“金额单位：人民币元(列至角分)”
+            cell = re.sub(r'^纳税人名称：|金额单位：人民币元\(列至角分\)', '', cell).strip()
+        cleaned_data.append(cell if cell else '')
+    return cleaned_data
 
 # 提取信息并重命名Excel文件的函数
 def extract_info_and_rename_excel(pdf_path, excel_path):
@@ -67,7 +75,7 @@ def extract_info_and_rename_excel(pdf_path, excel_path):
             if cell:
                 # 提取公司名称
                 if any(company_pattern in cell for company_pattern in company_patterns) and "其他有限责任公司" not in cell:
-                    company_name = re.sub(r'^纳税人名称：', '', cell).strip()
+                    company_name = cell.strip()
                     break
                 # 提取税种
                 for tax_type in tax_types:
@@ -89,11 +97,12 @@ def extract_info_and_rename_excel(pdf_path, excel_path):
         for pattern in company_patterns:
             match = re.search(rf".*{pattern}.*", first_page_text)
             if match:
-                company_name = re.sub(r'^纳税人名称：', '', match.group(0)).strip()
+                # 应用清洗函数
+                company_name = clean_data([match.group(0)])[0]
                 break
 
     wb.close()
-
+    print(f"公司名称: {company_name}, 税种: {extracted_tax_types}, 受理日期: {acceptance_date}")
     # 如果提取到足够信息，则重命名文件
     if company_name and extracted_tax_types and acceptance_date:
         new_file_name = f"{company_name}_{extracted_tax_types[0]}_{acceptance_date}.xlsx"
